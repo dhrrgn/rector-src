@@ -75,33 +75,36 @@ final class PhpFileProcessor implements FileProcessorInterface
         }
 
         // 2. change nodes with Rectors
-        $this->refactorNodesWithRectors($files, $configuration);
+        do {
+            $file->changeHasChanged(false);
+            $this->refactorNodesWithRectors($files, $configuration);
 
-        // 3. apply post rectors
-        foreach ($files as $file) {
-            $this->tryCatchWrapper($file, function (File $file): void {
-                $newStmts = $this->postFileProcessor->traverse($file->getNewStmts());
+            // 3. apply post rectors
+            foreach ($files as $file) {
+                $this->tryCatchWrapper($file, function (File $file): void {
+                    $newStmts = $this->postFileProcessor->traverse($file->getNewStmts());
 
-                // this is needed for new tokens added in "afterTraverse()"
-                $file->changeNewStmts($newStmts);
-            }, 'post rectors', $configuration);
-        }
-
-        // 4. print to file or string
-        foreach ($files as $file) {
-            $this->currentFileProvider->setFile($file);
-
-            // cannot print file with errors, as print would break everything to original nodes
-            if ($file->hasErrors()) {
-                $this->printFileErrors($file);
-                $this->advance($file, 'printing skipped due error', $configuration);
-                continue;
+                    // this is needed for new tokens added in "afterTraverse()"
+                    $file->changeNewStmts($newStmts);
+                }, 'post rectors', $configuration);
             }
 
-            $this->tryCatchWrapper($file, function (File $file) use ($configuration): void {
-                $this->printFile($file, $configuration);
-            }, 'printing', $configuration);
-        }
+            // 4. print to file or string
+            foreach ($files as $file) {
+                $this->currentFileProvider->setFile($file);
+
+                // cannot print file with errors, as print would break everything to original nodes
+                if ($file->hasErrors()) {
+                    $this->printFileErrors($file);
+                    $this->advance($file, 'printing skipped due error', $configuration);
+                    continue;
+                }
+
+                $this->tryCatchWrapper($file, function (File $file) use ($configuration): void {
+                    $this->printFile($file, $configuration);
+                }, 'printing', $configuration);
+            }
+        } while ($file->hasChanged());
 
         if ($configuration->shouldShowProgressBar()) {
             $this->symfonyStyle->newLine(2);
